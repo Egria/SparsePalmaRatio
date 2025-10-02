@@ -1,0 +1,23 @@
+{
+  "raw_filename": "data/human_meninges_development.h5ad",
+  "output_folder": "result_human_meninges_development",
+  "cell_type_column": "cell_type",
+  "gene_name_column": "Gene",
+  "min_cells": 3,
+  "min_genes": 2000,
+  "expression_cutoff": 1,
+  "log2_cutoffl": 0.0,
+  "log2_cutoffh": 20.0,
+  "palma_alpha": 1e-6,
+  "palma_upper": 0.01,
+  "palma_lower": 0.4,
+  "palma_winsor": 0.0,
+  "mad_eps": 1e-8,
+  "mad_nbins": 601,
+  "mad_topcut": 0.02,
+  "select_standard": "top",
+  "gene_topcut": 50,
+  "pval_threshold": 1e-4
+
+
+}

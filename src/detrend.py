@@ -14,7 +14,7 @@ def detrend(params: Parameters,
     palma_r, palma_z = detrend_palma_2pass_isotonic(log2max, palma, params.mad_eps, params.mad_topcut, params.mad_nbins)
 
 
-    csv_path = os.path.join(params.output_folder, "gene_stats.csv")
+    csv_path = os.path.join(params.output_folder, "gene_stats_detrend.csv")
     pd.DataFrame({"gini": gini, "gini_fit2": gini_d, "palma": palma, "palma_r2": palma_r,
                    "log2max": log2max}, index=genes_f).to_csv(csv_path,index=True, header=True)
     return gini_d, palma_r
