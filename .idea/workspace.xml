@@ -5,23 +5,22 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="166a3d00-4429-4fec-8523-6ae92b19a2d4" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/cfg/config_hmd_palma.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/binarize.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/clustering/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/clustering/leiden.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/comparison.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/generate_cluster.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/graph/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/graph/jaccard_radius_graph.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/make_graph.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/SparsePalma.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/SparsePalma.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/cfg/config_default.json" beforeDir="false" afterPath="$PROJECT_DIR$/cfg/config_default.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/calc_stat.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/calc_stat.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/cell_identify.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/cell_identify.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/detrend.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/detrend.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/detrending/gini_lowess.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/detrending/gini_lowess.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/detrending/palma_mad.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/detrending/palma_mad.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/filter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/filter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/metrics/palma_ratio.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/metrics/palma_ratio.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parameters.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/parameters.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/preprocess.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/preprocess.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/select_genes.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/select_genes.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -117,7 +116,7 @@
       <updated>1759364284856</updated>
       <workItem from="1759364285989" duration="12838000" />
       <workItem from="1759430814720" duration="1328000" />
-      <workItem from="1759432727767" duration="8199000" />
+      <workItem from="1759432727767" duration="20500000" />
     </task>
     <servers />
   </component>
@@ -125,6 +124,6 @@
     <option name="version" value="3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/SparsePalma$main.coverage" NAME="main Coverage Results" MODIFIED="1759440341599" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/SparsePalma$main.coverage" NAME="main Coverage Results" MODIFIED="1759495336606" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

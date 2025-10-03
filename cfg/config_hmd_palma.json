@@ -1,9 +1,9 @@
 {
   "raw_filename": "data/human_meninges_development.h5ad",
-  "output_folder": "result_human_meninges_development",
+  "output_folder": "result_human_meninges_development_palma",
   "cell_type_column": "cell_type",
   "gene_name_column": "Gene",
-  "method": "gini",
+  "method": "palma",
   "clustering": "leiden",
   "min_cells": 3,
   "min_genes": 2000,
