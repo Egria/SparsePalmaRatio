@@ -3,18 +3,33 @@ import pandas as pd
 import numpy as np
 from .parameters import Parameters
 from .detrending.gini_lowess import lowess_twopass_detrending
-from .detrending.palma_mad import detrend_palma_2pass_isotonic
+from .detrending.palma_mad import detrend_palma_cont_scale, detrend_palma_2pass_isotonic_stable
 
-def detrend(params: Parameters,
-            genes_f,
-            log2max: np.ndarray,
-            gini: np.ndarray,
-            palma: np.ndarray):
+def _rankp(col: pd.Series) -> np.ndarray:
+    G = len(col)
+    p_df = (col.rank(axis=0, method='average', ascending=True) - 0.5) / G
+    return p_df.to_numpy()
+
+def detrend(params: Parameters,gene_stats: pd.DataFrame) -> pd.DataFrame:
+    log2max = np.asarray(gene_stats['log2max'], dtype=float)
+    gini = np.asarray(gene_stats['gini'], dtype=float)
+    palma = np.asarray(gene_stats['palma'], dtype=float)
+    theil = np.asarray(gene_stats['theil'], dtype=float)
+    #idf = np.asarray(gene_stats['idf'], dtype=float)
+    coverage = np.asarray(gene_stats['coverage'], dtype=float)
     gini_d = lowess_twopass_detrending(log2max, gini)
-    palma_r, palma_z = detrend_palma_2pass_isotonic(log2max, palma, params.mad_eps, params.mad_topcut, params.mad_nbins)
-
+    palma_r, palma_z = detrend_palma_2pass_isotonic_stable(log2max, palma, params.mad_eps,
+                                                           params.mad_topcut, params.mad_nbins)
+    palma_d = lowess_twopass_detrending(log2max, palma)
+    theil_d = lowess_twopass_detrending(log2max, theil)
+    coverage_d = lowess_twopass_detrending(log2max, coverage)
+    gene_stats['gini_final'] = _rankp(pd.Series(gini_d))
+    gene_stats['palma_final'] = _rankp(pd.Series(palma_r))
+    gene_stats['fano_final'] = _rankp(gene_stats['fano'])
+    gene_stats['theil_final'] = _rankp(pd.Series(theil_d))
+    gene_stats['idf_final'] = _rankp(gene_stats['idf'])
+    gene_stats['coverage_final'] = _rankp(gene_stats['coverage'])
 
     csv_path = os.path.join(params.output_folder, "gene_stats_detrend.csv")
-    pd.DataFrame({"gini": gini, "gini_fit2": gini_d, "palma": palma, "palma_r2": palma_r,
-                   "log2max": log2max}, index=genes_f).to_csv(csv_path,index=True, header=True)
-    return gini_d, palma_r
+    gene_stats.to_csv(csv_path,index=True, header=True)
+    return gene_stats

@@ -10,3 +10,5 @@ openpyxl
 leidenalg
 igraph
 anndata
+scanpy
+giniclust3

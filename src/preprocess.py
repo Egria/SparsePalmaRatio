@@ -45,4 +45,4 @@ def preprocess(params: Parameters):
 
     print(f"Counts of {adata.n_vars:,} genes and {adata.n_obs:,} cells read from {params.raw_filename}")
     return (adata.X, adata.obs[params.cell_type_column].index,
-            adata.var[params.gene_name_column].index, adata.obs[params.cell_type_column])
+            adata.var.index, adata.obs[params.cell_type_column])

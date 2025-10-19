@@ -5,6 +5,10 @@ import os
 from .parameters import Parameters
 from .metrics.gini_index import gini_index_sparse_exact
 from .metrics.palma_ratio import palma_ratio_from_sparse_nonzeros
+from .metrics.fano_factor import fano_factor_from_sparse_nonzeros
+from .metrics.theil_index import theil_index_from_sparse_nonzeros
+from .metrics.idf_calc import idf_from_sparse_nonzeros
+from .metrics.coverage_specifictiy import coverage_specificity_from_nonzero
 
 def calc_gene_stats(
     params: Parameters,
@@ -12,7 +16,7 @@ def calc_gene_stats(
     genes_f,  # pandas.Index or Series
     gini_unbiased: bool = True,
     log2_eps: float = 0.0,      # set 0.1 if you want the earlier (+0.1) behavior
-):
+) -> pd.DataFrame:
     """
     EXACT per-gene stats on CSR (genes x cells):
       - gini (your exact formula, zero-aware)
@@ -29,6 +33,10 @@ def calc_gene_stats(
 
     gini = np.empty(n_genes, dtype=np.float64)
     palma_a = np.empty(n_genes, dtype=np.float64)
+    fano = np.empty(n_genes, dtype=np.float64)
+    theil = np.empty(n_genes, dtype=np.float64)
+    idf = np.empty(n_genes, dtype=np.float64)
+    coverage = np.empty(n_genes, dtype=np.float64)
     max_counts = np.zeros(n_genes, dtype=np.int64)
 
     for i in range(n_genes):
@@ -44,13 +52,18 @@ def calc_gene_stats(
                 upper=params.palma_upper, lower=params.palma_lower,
                 alpha=params.palma_alpha, winsor=params.palma_winsor
             )
+            fano[i] = fano_factor_from_sparse_nonzeros(v, n_cells)
+            theil[i] = theil_index_from_sparse_nonzeros(v, n_cells)
+            idf[i] = idf_from_sparse_nonzeros(v, n_cells)
+            coverage[i] = coverage_specificity_from_nonzero(v, n_cells, mass=0.95)
         else:
             raise ZeroDivisionError(f"GENE WITH NO EXPRESSIONS: {genes_f[i]}")
 
     # log2 of integer max counts (optionally with a small eps)
     log2max = np.log2(max_counts.astype(np.float64) + float(log2_eps))
+    gene_stats = pd.DataFrame({"gini":gini, "palma":palma_a, "fano": fano, "theil": theil,
+                               "idf": idf, "coverage": coverage, "log2max": log2max}, index=genes_f)
 
     csv_path = os.path.join(params.output_folder,"gene_stats.csv")
-    pd.DataFrame({"gini":gini, "palma":palma_a, "log2max": log2max}, index=genes_f).to_csv(csv_path,
-                                                                                           index=True, header=True)
-    return log2max, gini, palma_a
+    gene_stats.to_csv(csv_path, index=True, header=True)
+    return gene_stats#log2max, gini, palma_a, fano

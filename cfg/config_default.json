@@ -1,6 +1,6 @@
 {
   "raw_filename": "data/human_meninges_development.h5ad",
-  "output_folder": "result_human_meninges_development",
+  "output_folder": "result_human_meninges_development_gini",
   "cell_type_column": "cell_type",
   "gene_name_column": "Gene",
   "method": "gini",
@@ -21,7 +21,8 @@
   "gene_topcut": 50,
   "pval_threshold": 1e-4,
   "jaccard_gamma": 0.9,
-  "dbscan_eps": 0.3,
+  "graph_method": "knn",
+  "dbscan_eps": 0.6,
   "dbscan_minpts": 3
 
 
