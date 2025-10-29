@@ -12,7 +12,7 @@
   "log2_cutoffh": 20.0,
   "palma_alpha": 1e-6,
   "palma_upper": 0.1,
-  "palma_lower": 0.4,
+  "palma_lower": 0.75,
   "palma_winsor": 0.00,
   "mad_eps": 1e-8,
   "mad_nbins": 601,

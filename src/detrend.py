@@ -4,6 +4,7 @@ import numpy as np
 from .parameters import Parameters
 from .detrending.gini_lowess import lowess_twopass_detrending
 from .detrending.palma_mad import detrend_palma_cont_scale, detrend_palma_2pass_isotonic_stable
+from .detrending.lq_linear import leastsq_linear_detrending
 
 def _rankp(col: pd.Series) -> np.ndarray:
     G = len(col)
@@ -23,12 +24,17 @@ def detrend(params: Parameters,gene_stats: pd.DataFrame) -> pd.DataFrame:
     palma_d = lowess_twopass_detrending(log2max, palma)
     theil_d = lowess_twopass_detrending(log2max, theil)
     coverage_d = lowess_twopass_detrending(log2max, coverage)
+    palma_q = leastsq_linear_detrending(log2max, palma)
     gene_stats['gini_final'] = _rankp(pd.Series(gini_d))
-    gene_stats['palma_final'] = _rankp(pd.Series(palma_r))
+    gene_stats['palma_final'] = _rankp(pd.Series(palma_d))
     gene_stats['fano_final'] = _rankp(gene_stats['fano'])
     gene_stats['theil_final'] = _rankp(pd.Series(theil_d))
     gene_stats['idf_final'] = _rankp(gene_stats['idf'])
     gene_stats['coverage_final'] = _rankp(gene_stats['coverage'])
+    gene_stats['palma_r'] = palma_r
+    gene_stats['palma_z'] = palma_z
+    gene_stats['palma_d'] = palma_d
+    gene_stats['palma_q'] = palma_q
 
     csv_path = os.path.join(params.output_folder, "gene_stats_detrend.csv")
     gene_stats.to_csv(csv_path,index=True, header=True)

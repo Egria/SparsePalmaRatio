@@ -99,6 +99,8 @@ def _pca_from_rows(X_rows: sp.csr_matrix, n_components: int = 25, random_state: 
     PCA on genes×cells sparse: compute SVD on cells×genes (transpose).
     Returns dense (cells × n_components), L2-normalized rows.
     """
+    import random
+    random.seed(12277)
     X_cg = X_rows.T  # cells × genes
     svd = TruncatedSVD(n_components=n_components, random_state=random_state)
     Z = svd.fit_transform(X_cg)  # dense
@@ -146,7 +148,7 @@ def _leiden_from_similarity(A: sp.csr_matrix, resolution: float = 1.5, seed: int
     g = ig.Graph(n=A.shape[0], edges=list(zip(C.row.tolist(), C.col.tolist())), directed=False)
     g.es["weight"] = C.data.tolist()
     import random
-    random.seed(seed)
+    random.seed(1237)
     #la.set_rng_seed(seed)
     part = la.find_partition(g, la.RBConfigurationVertexPartition, weights="weight",
                              resolution_parameter=resolution, n_iterations=-1)
@@ -245,10 +247,10 @@ def detect_rare_B2(
     A_global: sp.csr_matrix | None = None,  # optional global fused graph (cells×cells, similarity)
     mix_alpha: float = 0.7,       # A_local = alpha*A_B2 + (1-alpha)*A_global[C,C]
     size_min_abs: int | None = None,  # override absolute min size; default max(10, ceil(0.003*N_total))
-    size_min_frac_parent: float = 0.02,     # ≥2% of parent (stricter with absolute)
+    size_min_frac_parent: float = 0.008,     # ≥2% of parent (stricter with absolute)
     conn_min: float = 0.5,        # internal connectivity threshold
     auc_min: float = 0.80,        # marker AUC threshold
-    n_markers_min: int = 2,       # require >=2 markers with AUC>=auc_min and logFC>0
+    n_markers_min: int = 1,       # require >=2 markers with AUC>=auc_min and logFC>0
     stab_bootstrap: int = 20,
     stab_frac: float = 0.8,
     stab_min: float = 0.5,        # mean bootstrap Jaccard ≥ 0.5

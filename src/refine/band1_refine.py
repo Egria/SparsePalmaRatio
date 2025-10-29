@@ -79,7 +79,9 @@ def _arctan_center_transform_rows(X_rows_csr: sp.csr_matrix) -> sp.csr_matrix:
 
 def _pca_from_rows(X_rows: sp.csr_matrix, n_components: int = 15, random_state: int = 0) -> np.ndarray:
     X_cg = X_rows.T
-    svd = TruncatedSVD(n_components=n_components, random_state=random_state)
+    import random
+    random.seed(1453)
+    svd = TruncatedSVD(n_components=n_components)#, random_state=random_state)
     Z = svd.fit_transform(X_cg)
     Z = normalize(Z, norm="l2", axis=1, copy=False)
     return Z
@@ -170,7 +172,6 @@ def detect_ultrarare_B1(
     genes_index: pd.Index,         # gene names aligned to rows
     labels_major: np.ndarray,      # parent cluster labels per cell
     B1_genes,                      # iterable of 0.1–1% band genes
-    *,
     B1_weights: pd.Series | None = None,  # optional per-gene weights in [0,1], index=gene
     use_arctan: bool = False,      # per-gene arctan centering before z-score/PCA
     n_pcs: int = 15,
@@ -182,7 +183,7 @@ def detect_ultrarare_B1(
     s_mad_accept: float = 1.0,     # median(s) ≥ median(parent)+s_mad_accept*MAD to accept
     conn_min: float = 0.20,
     auc_min: float = 0.85,
-    n_markers_min: int = 0,
+    n_markers_min: int = 1,
     stab_bootstrap: int = 20,
     stab_frac: float = 0.8,
     stab_min: float = 0.30,

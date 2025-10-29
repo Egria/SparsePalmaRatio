@@ -91,6 +91,7 @@ def leiden_from_radius_graph_inplace(
     # Flush remaining
     _flush_batch(edges_src, edges_dst, weights)
 
+
     # 4) Leiden (RBConfiguration with weights)
     part = la.find_partition(
         g,
