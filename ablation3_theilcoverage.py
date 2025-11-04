@@ -22,13 +22,17 @@ matrix_f, genes_f, cells_f = filter_counts(params, matrix, genes, cells, False)
 gene_stats = calc_gene_stats(params, matrix_f, genes_f)
 gene_stats = detrend(params, gene_stats)
 
+
+
+
+
 #cell_types = ["Mono2","Mono1","DC1","DC6","DC4"]
 #cell_types = ['Basal','Secretory']
 cell_types = labels.cat.categories.tolist()
 
-fano = [0.1*i for i in range(0,11)]
-palma = [0.2*i for i in range(0,11)]
-single_dict = [[0.0 for j in palma] for i in fano]
+theil_mix = [0.1*i for i in range(0,21)]
+theil_ngene = [50*i for i in range(1,21)]
+single_dict = [[0.0 for j in theil_ngene] for i in theil_mix]
 
 data_dic={}
 for cell_type in cell_types:
@@ -38,40 +42,43 @@ data_dic["NMI"] = copy.deepcopy(single_dict)
 
 
 
-for i, f in enumerate(fano):
-    for j, p in enumerate(palma):
+
+
+for i, tm in enumerate(theil_mix):
+    for j, tn in enumerate(theil_ngene):
+
         b5 = {"fano": 1.0}
         b4 = {"gini": 1.0}
-        b3 = {"palma": 1.0}
-        b2 = {"gini": 0.45, "palma": 0.55}
-        b1 = {"gini":0.6, "palma": 0.4}
+        b3 = {"coverage": 1.0}
+        b2 = {"gini": 0.45, "coverage": 0.55}
+        b1 = {"gini": 0.6, "coverage":0.4}
 
         bands = [
             ("50-30", b5, 0.0, 500),
             ("30-10", b4, 0.0, 50),
-            ("10-3", b3, 3.5, 850),
+            ("10-3", b3, 3.5, tn),
             ("3-1", b2, 1.0, 950),
             ("1-0.1", b1, 3.5, 350)
         ]
 
         graph, band_genes = make_channel_graphs(params, gene_stats, matrix_f, genes_f, labels, cells_f, cells,
-                                                b5=b5, b2=b2, b1=b1, band_weights=[f, 1.0-f, p, 0.0, 0.0], bands=bands)
+                                                b5=b5, b3=b3, b2=b2, b4=b4, b1=b1,
+                                                band_weights=[0.8, 0.2, tm, 0.0, 0.0], bands=bands)
         labels_f = generate_clusters(params, graph, cells_f)
+
         _labels, report = detect_rare_B2(matrix_f, genes_f, labels_f, band_genes[3],
                                          A_global=graph, output_path=params.output_folder, conn_min=0.6, stab_min=0.5,
-                                         random_state=12277, n_pcs=500, k_knn=500, size_min_frac_parent=0.005,
+                                         random_state=12277, n_pcs=50, k_knn=50, size_min_frac_parent=0.005,
                                          mix_alpha=0.8)
         __labels, report = detect_ultrarare_B1(matrix_f, genes_f, _labels, band_genes[4],
                                                output_path=params.output_folder, conn_min=0.6, stab_min=0.5)
-        result = pd.DataFrame({"label":labels_f}, index=cells_f)
         tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, __labels, labels, cells_f, cells)
         for cell_type in cell_types:
             data_dic[cell_type][i][j] = gt_breakdown.loc[cell_type,"f1"] \
                 if gt_breakdown.loc[cell_type,"mapped_match"] else 0.0
         data_dic["ARI"][i][j] = ari
         data_dic["NMI"][i][j] = nmi
-        print(f,p, ari, nmi)
-
+        print(tm, tn, ari, nmi)
 
 
 def generate_heatmap(data, fname):
@@ -85,19 +92,19 @@ def generate_heatmap(data, fname):
     im = ax.imshow(arr, aspect='auto', vmin=0.0, vmax=1.0)  # rank values
 
     # axis ticks & labels (rows = lower_bound, cols = upper_bound)
-    ax.set_yticks(np.arange(len(fano)))
-    ax.set_yticklabels([f"{v:.1f}" for v in fano])
-    ax.set_ylabel("Fano(Gini=1-Fano) graph weight (row)")
+    ax.set_yticks(np.arange(len(theil_mix)))
+    ax.set_yticklabels([f"{v:.1f}" for v in theil_mix])
+    ax.set_ylabel("90% Coverage mix rate (row)")
 
-    ax.set_xticks(np.arange(len(palma)))
-    ax.set_xticklabels([f"{v:.1f}" for v in palma], rotation=45, ha='right')
-    ax.set_xlabel("Palma graph weight (column)")
+    ax.set_xticks(np.arange(len(theil_ngene)))
+    ax.set_xticklabels([f"{v}" for v in theil_ngene], rotation=45, ha='right')
+    ax.set_xlabel("90% Coverage N genes (column)")
 
     # colorbar
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label("Cell type F1 or NMI/ARI")
 
-    ax.set_title("Heatmap of F1/NMI/ARI vs (fano(gini) weight/palma weight)")
+    ax.set_title("Heatmap of F1/NMI/ARI vs 90% Coverage mix rate/n genes")
     fig.tight_layout()
 
     for i in range(arr.shape[0]):
@@ -109,9 +116,12 @@ def generate_heatmap(data, fname):
 
 
 
-folder = "graphmix_102580"
+folder = "ablation4_102580"
 for cell_type in cell_types:
     _cell_type = cell_type.replace("/",".")
     generate_heatmap(data_dic[cell_type], f"{folder}/{_cell_type}_f1.png")
 generate_heatmap(data_dic["ARI"], f"{folder}/ARI.png")
 generate_heatmap(data_dic["NMI"], f"{folder}/NMI.png")
+
+
+

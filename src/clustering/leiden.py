@@ -24,7 +24,6 @@ def leiden_from_radius_graph_inplace(
     part   : leidenalg VertexPartition
     """
     # --- deps local to the function ---
-    random.seed(seed)
     if not sp.isspmatrix_csr(G):
         G = G.tocsr(copy=False)  # view; minimal overhead
     G.sort_indices()
@@ -99,6 +98,7 @@ def leiden_from_radius_graph_inplace(
         weights="weight",
         resolution_parameter=resolution,
         n_iterations=n_iterations,
+        seed = seed
     )
     labels = np.array(part.membership, dtype=int)
     return labels

@@ -28,11 +28,8 @@ gene_stats = detrend(params, gene_stats)
 #cell_types = ['Basal','Secretory']
 cell_types = labels.cat.categories.tolist()
 
-#gini_ratio = [0.05*i for i in range(0,21)]
-#b2_nfeatures = [50*i for i in range(1,21)]
-gini_ratio = [0.65,0.65,0.65]
-b2_nfeatures = [200,200,200]
-#b2_nfeatures[0] = 5
+gini_ratio = [0.05*i for i in range(0,21)]
+b2_nfeatures = [50*i for i in range(1,21)]
 single_dict = [[0.0 for j in b2_nfeatures] for i in gini_ratio]
 
 data_dic={}
@@ -53,34 +50,22 @@ for i, gr in enumerate(gini_ratio):
         b1 = {"palma": 1.0}
 
         bands = [
-            ("50-30", b5, 0.0, params.gene_nfeatures),
+            ("50-30", b5, 0.0, 500),
             ("30-10", b4, 0.0, params.gene_nfeatures),
-            ("10-3", b3, 0.0, 250),
+            ("10-3", b3, 0.0, 50),
             ("3-1", b2, 0.0, b2n),
-            ("1-0.1", b1, 3.5, 800)
+            ("1-0.1", b1, 3.5, 850)
         ]
         #print(b2n)
 
         graph, band_genes = make_channel_graphs(params, gene_stats, matrix_f, genes_f, labels, cells_f, cells,
                                                 b5=b5, b3=b3, b4=b4, b2=b2, b1=b1, bands=bands,
-                                                band_weights=[0.6, 0.0, 0.4, 0.0, 0.4])
-
-        if overlap is None:
-            overlap = band_genes
-        else:
-            for k in range(5):
-                _band = overlap[k]
-                _genes = band_genes[k]
-                overlapped = (~(_band==_genes)).sum()
-                print(overlapped)
-        continue
-
+                                                band_weights=[0.8, 0.0, 0.2, 0.0, 0.6])
         labels_f = generate_clusters(params, graph, cells_f)
-        tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, labels_f, labels, cells_f, cells)
-        print(gr, b2n, ari, nmi)
 
         _labels, report = detect_rare_B2(matrix_f, genes_f, labels_f, band_genes[3],
-                                         A_global=graph, output_path=params.output_folder, conn_min=0.35, stab_min=0.20)
+                                         A_global=graph, output_path=params.output_folder, conn_min=0.6, stab_min=0.5,
+                                         random_state=12277)
         tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, _labels, labels, cells_f, cells)
         for cell_type in cell_types:
             data_dic[cell_type][i][j] = gt_breakdown.loc[cell_type,"f1"] \

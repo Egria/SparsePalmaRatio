@@ -9,7 +9,7 @@ def blend_select_weighted_sum(
     blend_weights: Dict[str, float],
     idf_bar: float | None = None,           # IDF gate: only idf_final > idf_bar are eligible
     column_suffix: str = "_final",
-    metrics_allowed = ("fano","gini","palma","theil","idf"),
+    metrics_allowed = ("fano","gini","palma","theil","idf","coverage"),
     strict: bool = False,                   # if True, error when a weighted metric column is missing
     return_scores: bool = False             # if True, return (selected_genes, combined_score_series)
 ) -> Tuple[pd.Index, pd.Series] | pd.Index:

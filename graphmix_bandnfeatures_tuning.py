@@ -53,7 +53,7 @@ for i, gn in enumerate(gini_ngene):
 
         graph, band_genes = make_channel_graphs(params, gene_stats, matrix_f, genes_f, labels, cells_f, cells,
                                                 b5=b5, b4=b4, b3=b3, b2=b2, b1=b1,
-                                                bands=bands, band_weights=[0.6, 0.0, 0.4, 0.0, 0.4])
+                                                bands=bands, band_weights=[0.8, 0.0, 0.2, 0.0, 0.6])
         labels_f = generate_clusters(params, graph, cells_f)
         result = pd.DataFrame({"label":labels_f}, index=cells_f)
         tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, labels_f, labels, cells_f, cells)

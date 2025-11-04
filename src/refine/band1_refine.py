@@ -79,9 +79,7 @@ def _arctan_center_transform_rows(X_rows_csr: sp.csr_matrix) -> sp.csr_matrix:
 
 def _pca_from_rows(X_rows: sp.csr_matrix, n_components: int = 15, random_state: int = 0) -> np.ndarray:
     X_cg = X_rows.T
-    import random
-    random.seed(1453)
-    svd = TruncatedSVD(n_components=n_components)#, random_state=random_state)
+    svd = TruncatedSVD(n_components=n_components, random_state=1453)#, random_state=random_state)
     Z = svd.fit_transform(X_cg)
     Z = normalize(Z, norm="l2", axis=1, copy=False)
     return Z
@@ -146,11 +144,9 @@ def _bootstrap_stability(A_full: sp.csr_matrix, base_S_mask: np.ndarray,
         C = sp.triu(A_sub, k=1, format="coo")
         g = ig.Graph(n=A_sub.shape[0], edges=list(zip(C.row.tolist(), C.col.tolist())), directed=False)
         g.es["weight"] = C.data.tolist()
-        import random
-        random.seed(47)
         #la.set_rng_seed(seed + b + 1)
         part = la.find_partition(g, la.RBConfigurationVertexPartition, weights="weight",
-                                 resolution_parameter=resolution, n_iterations=-1)
+                                 resolution_parameter=resolution, n_iterations=-1, seed=seed)
         labs = np.array(part.membership, dtype=int)
         S_U_mask = np.isin(U, base_idx)
         if not S_U_mask.any():

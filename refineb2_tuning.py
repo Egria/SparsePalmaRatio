@@ -26,16 +26,16 @@ b2 = {"gini": 0.2, "palma":0.8}
 b1 = {"palma": 1.0}
 
 bands = [
-            ("50-30", b5, 0.0, params.gene_nfeatures),
+            ("50-30", b5, 0.0, 500),
             ("30-10", b4, 0.0, params.gene_nfeatures),
-            ("10-3", b3, 0.0, 250),
+            ("10-3", b3, 0.0, 50),
             ("3-1", b2, 0.0, params.gene_nfeatures),
-            ("1-0.1", b1, 3.5, 800)
+            ("1-0.1", b1, 3.5, 850)
         ]
 
 
 graph, band_genes = make_channel_graphs(params, gene_stats, matrix_f, genes_f, labels, cells_f, cells,
-                                        b5=b5,b3=b3,b4=b4,b2=b2, b1=b1,bands=bands, band_weights=[0.6, 0.0, 0.4, 0.0, 0.4])
+                                        b5=b5,b3=b3,b4=b4,b2=b2, b1=b1,bands=bands, band_weights=[0.8, 0.0, 0.2, 0.0, 0.6])
 labels_f = generate_clusters(params, graph, cells_f)
 
 
@@ -59,7 +59,7 @@ data_dic["NMI"] = copy.deepcopy(single_dict)
 for i, c in enumerate(conn):
     for j, s in enumerate(stab):
         _labels, report = detect_rare_B2(matrix_f, genes_f, labels_f, band_genes[3],
-                                         A_global=graph, output_path=params.output_folder, conn_min=c, stab_min=s)
+                                         A_global=graph, output_path=params.output_folder, conn_min=c, stab_min=s, random_state=12277)
         tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, _labels, labels, cells_f, cells)
         for cell_type in cell_types:
             data_dic[cell_type][i][j] = gt_breakdown.loc[cell_type,"f1"] \

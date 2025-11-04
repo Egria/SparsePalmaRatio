@@ -99,8 +99,6 @@ def _pca_from_rows(X_rows: sp.csr_matrix, n_components: int = 25, random_state: 
     PCA on genes×cells sparse: compute SVD on cells×genes (transpose).
     Returns dense (cells × n_components), L2-normalized rows.
     """
-    import random
-    random.seed(12277)
     X_cg = X_rows.T  # cells × genes
     svd = TruncatedSVD(n_components=n_components, random_state=random_state)
     Z = svd.fit_transform(X_cg)  # dense
@@ -147,11 +145,8 @@ def _leiden_from_similarity(A: sp.csr_matrix, resolution: float = 1.5, seed: int
     C = sp.triu(A, k=1, format="coo")
     g = ig.Graph(n=A.shape[0], edges=list(zip(C.row.tolist(), C.col.tolist())), directed=False)
     g.es["weight"] = C.data.tolist()
-    import random
-    random.seed(1237)
-    #la.set_rng_seed(seed)
     part = la.find_partition(g, la.RBConfigurationVertexPartition, weights="weight",
-                             resolution_parameter=resolution, n_iterations=-1)
+                             resolution_parameter=resolution, n_iterations=-1, seed=seed)
     return np.array(part.membership, dtype=int)
 
 def _internal_connectivity(A: sp.csr_matrix, S_idx: np.ndarray) -> float:
@@ -326,6 +321,8 @@ def detect_rare_B2(
             A_loc = (al * A_loc) + ((1.0 - al) * A_gl)
             A_loc.setdiag(0.0); A_loc.eliminate_zeros()
 
+        np.maximum(A_loc.data, 0, out=A_loc.data)  # set negatives to 0 (in-place)
+        A_loc.eliminate_zeros()
         # Local Leiden to propose splits
         lab_local = _leiden_from_similarity(A_loc, resolution=resolution, seed=random_state)
         parts = np.unique(lab_local)
