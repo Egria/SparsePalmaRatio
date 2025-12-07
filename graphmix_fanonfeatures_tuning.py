@@ -12,7 +12,7 @@ from src.channels import make_channel_graphs
 from src.refine_cluster import refine_cluster
 
 
-config_filename = "cfg/config_102580.json"
+config_filename = "cfg/config_94820.json"
 params = Parameters(config_filename)
 matrix, cells, genes, labels = preprocess(params)
 matrix_f, genes_f, cells_f = filter_counts(params, matrix, genes, cells, False)
@@ -23,8 +23,8 @@ gene_stats = detrend(params, gene_stats)
 #cell_types = ['Basal','Secretory']
 cell_types = labels.cat.categories.tolist()
 
-gini_ngene = [50]
-palma_ngene = [850]
+gini_ngene = [300]
+palma_ngene = [200]
 fano_ngene = [50*i for i in range(1,21)]
 single_dict = [[0.0 for j in fano_ngene] for i in gini_ngene]
 
@@ -49,12 +49,12 @@ for i, gn in enumerate(gini_ngene):
             ("30-10", b4, 0.0, params.gene_nfeatures),
             ("10-3", b3, 0.0, gn),
             ("3-1", b2, 0.0, params.gene_nfeatures),
-            ("1-0.1", b1, 3.5, 850)
+            ("1-0.1", b1, 3.5, 200)
         ]
 
         graph, band_genes = make_channel_graphs(params, gene_stats, matrix_f, genes_f, labels, cells_f, cells,
                                                 b5=b5, b4=b4, b3=b3, b2=b2, b1=b1,
-                                                bands=bands, band_weights=[0.8, 0.0, 0.2, 0.0, 0.6])
+                                                bands=bands, band_weights=[0.8, 0.0, 0.2, 0.0, 0.2])
         labels_f = generate_clusters(params, graph, cells_f)
         result = pd.DataFrame({"label":labels_f}, index=cells_f)
         tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, labels_f, labels, cells_f, cells)
@@ -102,7 +102,7 @@ def generate_heatmap(data, fname):
 
 
 
-folder = "graphmix_nfeatures_102580"
+folder = "graphmix_nfeatures_94820"
 for cell_type in cell_types:
     _cell_type = cell_type.replace("/",".")
     generate_heatmap(data_dic[cell_type], f"{folder}/{_cell_type}_f1.png")

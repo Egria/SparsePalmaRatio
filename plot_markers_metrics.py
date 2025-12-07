@@ -168,11 +168,11 @@ def main():
 
 
 if __name__ == "__main__":
-    metrics_csv = "./result_human_meninges_development/gene_stats_detrend.csv"
-    markers_csv = "./markers_hmd/markers_long_table.csv"
+    metrics_csv = "./result_gse159115/gene_stats_detrend.csv"
+    markers_csv = "./markers_159115/markers_long_table.csv"
     metrics = "palma_final,gini_final"
     min_freq = 1e-18
-    outdir = "markers_hmd"
+    outdir = "markers_159115"
     max_points_per_metric = None
     random_seed = 42
 

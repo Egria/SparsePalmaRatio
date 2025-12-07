@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """
-Find top gene markers per label and plot distributions.
+Find gene markers for specific cell types within a specific subset of the data.
 
-New: --plot-scope {group_vs_rest,all_cells,both}
-  group_vs_rest  -> label vs rest (default; old behavior)
-  all_cells      -> one global distribution per gene
-  both           -> write both styles
+Example usage scenario:
+  "Find M16 markers, but only compare M16 against M01..M19 (ignoring all others)."
 
-Other plot flags unchanged:
-  --plot {none,hist,kde,both}
-  --kde-sample-size, --bins, --layer-for-plots, --no-log1p, --plot-top-per-label
+Usage in Python:
+    markers_from_h5ad(
+        ...,
+        restrict_to_groups=["M01", "M02", ..., "M19"],
+        target_groups=["M16"]
+    )
 """
 
 import os
 import argparse
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union, Iterable
 
 import numpy as np
 import pandas as pd
@@ -80,7 +81,9 @@ def _safe_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
 
 # ----------------------------- marker finding -----------------------------
 
-def _rank_and_augment(adata: "sc.AnnData", label_col: str, method: str = "wilcoxon",
+def _rank_and_augment(adata: "sc.AnnData", label_col: str,
+                      target_groups: Optional[List[str]] = None,
+                      method: str = "wilcoxon",
                       n_top: int = 50, compute_auc_top_n: int = 200,
                       min_cells_per_gene: int = 3, eps: float = 1e-9) -> Dict[str, pd.DataFrame]:
     if min_cells_per_gene and min_cells_per_gene > 0:
@@ -88,25 +91,41 @@ def _rank_and_augment(adata: "sc.AnnData", label_col: str, method: str = "wilcox
 
     _normalize_and_log(adata, target_sum=1e4)
 
+    # 1. Calculate stats
+    groups_to_rank = target_groups if target_groups else 'all'
+    print(f"Running rank_genes_groups using method='{method}' on groups: {groups_to_rank}")
+
     sc.tl.rank_genes_groups(
-        adata, groupby=label_col, method=method,
-        corr_method="benjamini-hochberg", n_genes=None, use_raw=False
+        adata, groupby=label_col, groups=groups_to_rank, reference='rest',
+        method=method, corr_method="benjamini-hochberg", n_genes=None, use_raw=False
     )
 
+    # 2. Retrieve results
     df_all = sc.get.rank_genes_groups_df(adata, group=None)
+
+    # SAFETY: Patch missing 'group' column if it happens (rare edge case with single group)
+    if "group" not in df_all.columns:
+        if target_groups and len(target_groups) == 1:
+            df_all["group"] = target_groups[0]
+
     df_all.rename(columns={"names": "gene", "pvals": "pval", "pvals_adj": "qval"}, inplace=True)
 
-    labels = list(adata.obs[label_col].cat.categories)
-    results: Dict[str, pd.DataFrame] = {}
+    if target_groups:
+        labels_to_process = [l for l in target_groups if l in adata.obs[label_col].unique()]
+    else:
+        labels_to_process = list(adata.obs[label_col].cat.categories)
 
+    results: Dict[str, pd.DataFrame] = {}
     counts_layer, norm_layer = "counts", "norm"
     n_cells_total = adata.n_obs
-    membership = {lab: (adata.obs[label_col].values == lab) for lab in labels}
 
-    for lab in labels:
+    membership = {lab: (adata.obs[label_col].values == lab) for lab in labels_to_process}
+
+    for lab in labels_to_process:
         mask_in = membership[lab]
         mask_out = ~mask_in
         n_in, n_out = int(mask_in.sum()), int(mask_out.sum())
+
         if n_in == 0 or n_out == 0:
             continue
 
@@ -122,24 +141,23 @@ def _rank_and_augment(adata: "sc.AnnData", label_col: str, method: str = "wilcox
             "mean_out_norm": mean_out.astype(np.float32),
             "pct_in": det_in.astype(np.float32),
             "pct_out": det_out.astype(np.float32),
-            "log2fc": log2fc.astype(np.float32),
+            "log2fc": log2fc.astype(np.float32),  # Changed back to 'log2fc'
         })
 
         df_lab = df_all[df_all["group"] == lab].merge(aug, on="gene", how="left")
         df_lab = df_lab.sort_values(["qval", "scores"], ascending=[True, False], kind="mergesort")
         df_lab.insert(0, "rank", np.arange(1, len(df_lab) + 1))
 
-        # Optional AUC
         if compute_auc_top_n and compute_auc_top_n > 0:
             y_true = mask_in.astype(int)
             top_genes = df_lab["gene"].head(compute_auc_top_n).tolist()
             gene_to_col = {g: i for i, g in enumerate(adata.var_names)}
             auc_vals = np.full(len(df_lab), np.nan, dtype=np.float32)
             X_for_auc = adata.layers[norm_layer]
+
             for i, g in enumerate(top_genes):
                 col = gene_to_col.get(g, None)
-                if col is None:
-                    continue
+                if col is None: continue
                 if sp.issparse(X_for_auc):
                     y_score = np.asarray(X_for_auc[:, col].todense()).ravel()
                 else:
@@ -161,16 +179,32 @@ def _rank_and_augment(adata: "sc.AnnData", label_col: str, method: str = "wilcox
 
 
 def _write_outputs(per_label: Dict[str, pd.DataFrame], outdir: str) -> pd.DataFrame:
+    if not per_label:
+        print("No results to write.")
+        return pd.DataFrame()
+
     os.makedirs(outdir, exist_ok=True)
     for lab, df in per_label.items():
         safe = _sanitize(lab)
         df.to_csv(os.path.join(outdir, f"{safe}_markers.csv"), index=False)
+
     cols = ["label", "rank", "gene", "scores", "pval", "qval",
             "log2fc", "mean_in_norm", "mean_out_norm", "pct_in", "pct_out",
             "auc_norm_expr", "cells_in_label", "label_frequency"]
-    long_df = (pd.concat([df.assign(label=lab) for lab, df in per_label.items()],
-                         axis=0, ignore_index=True)[cols]
-               .sort_values(["label", "rank"]))
+
+    # FIX: Ensure we keep 'label' plus whatever valid columns exist in the data
+    example_df = next(iter(per_label.values()))
+    valid_data_cols = [c for c in cols if c in example_df.columns]
+    final_cols = ["label"] + valid_data_cols
+    # Remove duplicates just in case
+    final_cols = list(dict.fromkeys(final_cols))
+
+    long_df = pd.concat([df.assign(label=lab) for lab, df in per_label.items()],
+                        axis=0, ignore_index=True)
+
+    # Select columns and sort
+    long_df = long_df[final_cols].sort_values(["label", "rank"])
+
     long_df.to_csv(os.path.join(outdir, "markers_long_table.csv"), index=False)
     return long_df
 
@@ -206,7 +240,6 @@ def _plot_hist(vals: np.ndarray, title: str, out_png: str, bins: int = 50, xlabe
 
 def _plot_kde(vals: np.ndarray, title: str, out_png: str, sample_for_kde: int = 20000,
               xlabel: str = "log1p(normalized counts)"):
-    # Downsample if large
     if vals.size > sample_for_kde:
         idx = np.random.choice(vals.size, size=sample_for_kde, replace=False)
         vals = vals[idx]
@@ -227,7 +260,6 @@ def _plot_kde(vals: np.ndarray, title: str, out_png: str, sample_for_kde: int = 
 
 def _plot_group_vs_rest(vals_in: np.ndarray, vals_out: np.ndarray, gene: str, label: str,
                         outdir: str, bins: int, sample_for_kde: int, do_hist: bool, do_kde: bool):
-    # Hist overlay
     if do_hist:
         plt.figure()
         plt.hist(vals_in, bins=bins, density=True, alpha=0.6, label=str(label))
@@ -239,25 +271,26 @@ def _plot_group_vs_rest(vals_in: np.ndarray, vals_out: np.ndarray, gene: str, la
         plt.tight_layout()
         plt.savefig(os.path.join(outdir, f"{_sanitize(gene)}_hist.png"), dpi=160)
         plt.close()
-    # KDE overlay
     if do_kde:
-        # Optional downsampling handled inside
         def _maybe_sample(v: np.ndarray) -> np.ndarray:
             if v.size > sample_for_kde:
                 idx = np.random.choice(v.size, size=sample_for_kde, replace=False)
                 return v[idx]
             return v
+
         xin, xout = _maybe_sample(vals_in), _maybe_sample(vals_out)
         plt.figure()
         xs_min, xs_max = float(min(xin.min(), xout.min())), float(max(xin.max(), xout.max()))
         if np.isfinite(xs_min) and np.isfinite(xs_max) and xs_min != xs_max:
             xs = np.linspace(xs_min, xs_max, 256)
             if np.unique(xin).size > 1:
-                kde_in = gaussian_kde(xin); plt.plot(xs, kde_in(xs), label=str(label))
+                kde_in = gaussian_kde(xin);
+                plt.plot(xs, kde_in(xs), label=str(label))
             else:
                 plt.plot(xin, np.zeros_like(xin), ".", label=str(label))
             if np.unique(xout).size > 1:
-                kde_out = gaussian_kde(xout); plt.plot(xs, kde_out(xs), label="rest")
+                kde_out = gaussian_kde(xout);
+                plt.plot(xs, kde_out(xs), label="rest")
             else:
                 plt.plot(xout, np.zeros_like(xout), ".", label="rest")
         else:
@@ -274,7 +307,6 @@ def _plot_group_vs_rest(vals_in: np.ndarray, vals_out: np.ndarray, gene: str, la
 
 def _plot_all_cells(vals_all: np.ndarray, gene: str, label: str, outdir: str,
                     bins: int, sample_for_kde: int, do_hist: bool, do_kde: bool):
-    """Plots that ignore labels: global gene distribution; saved in the label's folder."""
     if do_hist:
         _plot_hist(vals_all, title=f"{gene} — all cells (hist)",
                    out_png=os.path.join(outdir, f"{_sanitize(gene)}_allcells_hist.png"),
@@ -329,20 +361,47 @@ def _plot_all_markers(adata: "sc.AnnData", per_label: Dict[str, pd.DataFrame], o
 # ----------------------------- public API -----------------------------
 
 def markers_from_preprocessed(
-    X_csr: sp.csr_matrix, cell_index: pd.Index, gene_index: pd.Index, labels: pd.Series,
-    outdir: str = "markers_out", label_col: str = "label",
-    method: str = "wilcoxon", n_top: int = 50, compute_auc_top_n: int = 200,
-    min_cells_per_gene: int = 3,
-    # plotting options
-    plot: str = "none",                          # {"none","hist","kde","both"}
-    plot_scope: str = "group_vs_rest",           # {"group_vs_rest","all_cells","both"}
-    plot_top_per_label: Optional[int] = None,    # defaults to n_top
-    bins: int = 50, layer_for_plots: str = "norm",
-    log1p_for_plots: bool = True, kde_sample_size: int = 20000
+        X_csr: sp.csr_matrix, cell_index: pd.Index, gene_index: pd.Index, labels: pd.Series,
+        outdir: str = "markers_out", label_col: str = "label",
+
+        # New filters
+        restrict_to_groups: Optional[List[str]] = None,  # The universe of cells to consider
+        target_groups: Optional[List[str]] = None,  # The specific groups to find markers for
+
+        method: str = "wilcoxon", n_top: int = 50, compute_auc_top_n: int = 200,
+        min_cells_per_gene: int = 3,
+        plot: str = "none", plot_scope: str = "group_vs_rest",
+        plot_top_per_label: Optional[int] = None,
+        bins: int = 50, layer_for_plots: str = "norm",
+        log1p_for_plots: bool = True, kde_sample_size: int = 20000
 ) -> pd.DataFrame:
     adata = _build_adata(X_csr, cell_index, gene_index, labels, label_col=label_col)
+
+    # --- NEW: SUBSET LOGIC ---
+    if restrict_to_groups is not None:
+        print(f"Restricting analysis universe to {len(restrict_to_groups)} groups...")
+        # Verify overlap
+        existing_groups = set(adata.obs[label_col].unique())
+        wanted_groups = set(restrict_to_groups)
+        valid_groups = list(wanted_groups.intersection(existing_groups))
+
+        if len(valid_groups) < len(wanted_groups):
+            missing = wanted_groups - existing_groups
+            print(f"Warning: {len(missing)} groups requested were not found in data: {list(missing)[:5]}...")
+
+        if len(valid_groups) == 0:
+            raise ValueError("None of the 'restrict_to_groups' labels were found in the data.")
+
+        # Physical Subset
+        adata = adata[adata.obs[label_col].isin(valid_groups)].copy()
+        # Clean up categories
+        adata.obs[label_col] = adata.obs[label_col].cat.remove_unused_categories()
+        print(f"Subset complete. New shape: {adata.shape}")
+
     per_label = _rank_and_augment(
-        adata, label_col=label_col, method=method, n_top=n_top,
+        adata, label_col=label_col,
+        target_groups=target_groups,  # Pass the specific targets here
+        method=method, n_top=n_top,
         compute_auc_top_n=compute_auc_top_n, min_cells_per_gene=min_cells_per_gene
     )
     long_df = _write_outputs(per_label, outdir)
@@ -361,14 +420,18 @@ def markers_from_preprocessed(
 
 
 def markers_from_h5ad(
-    h5ad_path: str, label_col: str, outdir: str = "markers_out",
-    method: str = "wilcoxon", n_top: int = 50, compute_auc_top_n: int = 200,
-    min_cells_per_gene: int = 3,
-    # plotting options
-    plot: str = "none", plot_scope: str = "group_vs_rest",
-    plot_top_per_label: Optional[int] = None,
-    bins: int = 50, layer_for_plots: str = "norm",
-    log1p_for_plots: bool = True, kde_sample_size: int = 20000
+        h5ad_path: str, label_col: str, outdir: str = "markers_out",
+
+        # New filters
+        restrict_to_groups: Optional[List[str]] = None,
+        target_groups: Optional[List[str]] = None,
+
+        method: str = "wilcoxon", n_top: int = 50, compute_auc_top_n: int = 200,
+        min_cells_per_gene: int = 3,
+        plot: str = "none", plot_scope: str = "group_vs_rest",
+        plot_top_per_label: Optional[int] = None,
+        bins: int = 50, layer_for_plots: str = "norm",
+        log1p_for_plots: bool = True, kde_sample_size: int = 20000
 ) -> pd.DataFrame:
     ad = sc.read_h5ad(h5ad_path, backed=None)
     if not ad.var_names.is_unique:
@@ -381,60 +444,45 @@ def markers_from_h5ad(
     labels = ad.obs[label_col]
     return markers_from_preprocessed(
         X, ad.obs_names, ad.var_names, labels,
-        outdir=outdir, label_col=label_col, method=method,
+        outdir=outdir, label_col=label_col,
+        restrict_to_groups=restrict_to_groups,
+        target_groups=target_groups,
+        method=method,
         n_top=n_top, compute_auc_top_n=compute_auc_top_n,
         min_cells_per_gene=min_cells_per_gene,
         plot=plot, plot_scope=plot_scope, plot_top_per_label=plot_top_per_label,
         bins=bins, layer_for_plots=layer_for_plots,
         log1p_for_plots=log1p_for_plots, kde_sample_size=kde_sample_size
     )
-# ----------------------------- CLI -----------------------------
-
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Find top gene markers per label.")
-    p.add_argument("--h5ad", type=str, help="Path to .h5ad (if using CLI mode).")
-    p.add_argument("--label-col", type=str, default="cell_type",
-                   help="Column in .obs with ground-truth labels.")
-    p.add_argument("--outdir", type=str, default="markers_out", help="Output directory.")
-    p.add_argument("--method", type=str, default="wilcoxon",
-                   choices=["wilcoxon", "t-test", "t-test_overestim_var", "logreg"],
-                   help="Differential test in scanpy.tl.rank_genes_groups.")
-    p.add_argument("--top-n", type=int, default=50, help="How many markers to keep per label.")
-    p.add_argument("--auc-top-n", type=int, default=200,
-                   help="Compute ROC-AUC only for the top-N genes (speed). Set 0 to skip.")
-    p.add_argument("--min-cells-per-gene", type=int, default=3,
-                   help="Filter away genes expressed in fewer than this many cells.")
-    return p.parse_args()
-
-
-def main():
-    args = _parse_args()
-    if not args.h5ad:
-        raise SystemExit("Please supply --h5ad PATH (or call markers_from_preprocessed from your code).")
-    long_df = markers_from_h5ad(
-        h5ad_path=args.h5ad,
-        label_col=args.label_col,
-        outdir=args.outdir,
-        method=args.method,
-        n_top=args.top_n,
-        compute_auc_top_n=args.auc_top_n,
-        min_cells_per_gene=args.min_cells_per_gene,
-    )
-    # Print a tiny summary
-    print(f"Done. Wrote per-label CSVs and 'markers_long_table.csv' to: {os.path.abspath(args.outdir)}")
-    with pd.option_context("display.max_rows", 8, "display.max_colwidth", 30):
-        print(long_df.groupby('label').head(3))
 
 
 if __name__ == "__main__":
+    # --- Example Usage for your specific M-types request ---
+
+    # 1. Load labels temporarily just to generate the M-list (or define manually)
+    # Since we can't load the file twice easily in this snippet,
+    # assume you know the list or generate it like this:
+    # m_types = [f"M{i:02d}" for i in range(1, 20)] # Generates M01, M02... M19
+
+    # For demonstration, we will assume you have the list ready.
+    # Below shows how you would call it.
+
+    # This list defines the "Universe" (Background)
+    my_universe = [f"M{i:02d}" for i in range(1, 20)]  # ['M01', 'M02', ... 'M19']
+
+    # This list defines what you want markers FOR
+    my_target = ["M16"]
+
+    print("Targeting M16 vs (M01..M19 only)...")
+
+
     long_df = markers_from_h5ad(
         h5ad_path='data/GSE206785.h5ad',
         label_col='Subtype',
-        outdir='markers_206785',
+        outdir='markers_M16_subset',
+        restrict_to_groups=my_universe,  # <--- CRITICAL: filters out everything else
+        target_groups=my_target,         # <--- CRITICAL: only computes M16 stats
         method='wilcoxon',
-        n_top=15,
-        compute_auc_top_n=200,
-        min_cells_per_gene=3,
-        plot='both',
-        plot_scope='both'
+        n_top=20,
+        plot='both'
     )

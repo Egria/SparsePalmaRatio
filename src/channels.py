@@ -28,7 +28,7 @@ def make_channel_graphs(params: Parameters, gene_stats:pd.DataFrame, matrix:sp.c
         ]
     band_graphs = []
     if band_weights is None: band_weights = [0.18, 0.2, 0.22, 0.22, 0.18] #[0.1, 0.15, 0.2, 0.25, 0.3]
-
+    print(bands,band_weights)
 
 
     band_genes = []

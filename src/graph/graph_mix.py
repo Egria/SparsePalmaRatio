@@ -71,7 +71,7 @@ def mix_knn_graphs(
     per_graph_normalize: str = "none",  # 'none' | 'row_l1' | 'max'
     symmetrize: str = "none",         # 'none' | 'max' | 'mean' | 'min' | 'sum'
     drop_self_loops: bool = True,
-    clip_range: Tuple[float,float] | None = (0.0, 1.0),   # clip mixed weights to a range
+    clip_range: Tuple[float,float] | None = None,   # clip mixed weights to a range
     prune_topk: int | None = None,   # keep top-k neighbors per row after mixing (optional)
     dtype = np.float64
 ) -> sp.csr_matrix:

@@ -30,9 +30,9 @@ gene_stats = detrend(params, gene_stats)
 #cell_types = ['Basal','Secretory']
 cell_types = labels.cat.categories.tolist()
 
-gini_ratio_b2 = [0.1*i for i in range(0,11)]
-gini_ratio_b1 = [0.1*i for i in range(0,11)]
-single_dict = [[0.0 for j in gini_ratio_b1] for i in gini_ratio_b2]
+gini_ratio = [0.1*i for i in range(0,11)]
+palma_ratio = [0.1*i for i in range(0,21)]
+single_dict = [[0.0 for j in palma_ratio] for i in gini_ratio]
 
 data_dic={}
 for cell_type in cell_types:
@@ -63,14 +63,13 @@ labels_f = generate_clusters(params, graph, cells_f)
 tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, labels_f, labels, cells_f, cells)
 print(f"ARI: {ari}, NMI: {nmi}")
 
-for i, gr2 in enumerate(gini_ratio_b2):
-    for j, gr1 in enumerate(gini_ratio_b1):
-        b1_genes, _ = select_genes(params,gene_stats, {"gini":gr1, "palma":1.0-gr1},350,3.5)
-        b2_genes, _ = select_genes(params, gene_stats, {"gini": gr2, "palma": 1.0 - gr2}, 950, 1.0)
+for i, gr2 in enumerate(gini_ratio):
+    for j, gp in enumerate(palma_ratio):
+        b1_genes, _ = select_genes(params,gene_stats, {"fano":1.0-gr2,"gini":gr2, "palma":gp},350,3.5)
+        b2_genes, _ = select_genes(params, gene_stats, {"fano":1.0-gr2,"gini": gr2, "palma": gp}, 950, 1.0)
         _labels, report = detect_rare_B2(matrix_f, genes_f, labels_f, b2_genes,
-                                         A_global=graph, output_path=params.output_folder, conn_min=0.6, stab_min=0.5,
-                                         random_state=12277, n_pcs=500, k_knn=500, size_min_frac_parent=0.005,
-                                         mix_alpha=0.8)
+                                          output_path=params.output_folder, conn_min=0.6, stab_min=0.5,
+                                         random_state=12277, n_pcs=500, k_knn=500, size_min_frac_parent=0.005)
         __labels, report = detect_ultrarare_B1(matrix_f, genes_f, _labels, b1_genes,
                                                output_path=params.output_folder, conn_min=0.6, stab_min=0.5)
         tab, gt_breakdown, ari, nmi = compare_clusters_filtered(params, __labels, labels, cells_f, cells)
@@ -79,7 +78,7 @@ for i, gr2 in enumerate(gini_ratio_b2):
                 if gt_breakdown.loc[cell_type,"mapped_match"] else 0.0
         data_dic["ARI"][i][j] = ari
         data_dic["NMI"][i][j] = nmi
-        print(gr2, gr1, ari, nmi)
+        print(gr2, gp, ari, nmi)
 
 
 def generate_heatmap(data, fname):
@@ -93,19 +92,19 @@ def generate_heatmap(data, fname):
     im = ax.imshow(arr, aspect='auto', vmin=0.0, vmax=1.0)  # rank values
 
     # axis ticks & labels (rows = lower_bound, cols = upper_bound)
-    ax.set_yticks(np.arange(len(gini_ratio_b2)))
-    ax.set_yticklabels([f"{v:.1f}" for v in gini_ratio_b2])
-    ax.set_ylabel("Gini Ratio for B2 detection (Palma=1-Gini) (row)")
+    ax.set_yticks(np.arange(len(gini_ratio)))
+    ax.set_yticklabels([f"{v:.1f}" for v in gini_ratio])
+    ax.set_ylabel("Gini Ratio for Refine (Fano=1-Gini) (row)")
 
-    ax.set_xticks(np.arange(len(gini_ratio_b1)))
-    ax.set_xticklabels([f"{v:.1f}" for v in gini_ratio_b1], rotation=45, ha='right')
-    ax.set_xlabel("Gini Ratio for B1 detection (column)")
+    ax.set_xticks(np.arange(len(palma_ratio)))
+    ax.set_xticklabels([f"{v:.1f}" for v in palma_ratio], rotation=45, ha='right')
+    ax.set_xlabel("Palma Ratio for Refine (column)")
 
     # colorbar
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label("Cell type F1 or NMI/ARI")
 
-    ax.set_title("Heatmap of F1/NMI/ARI vs (B2/B1 refinement Gini(1-Palma) Ratio)")
+    ax.set_title("Heatmap of F1/NMI/ARI vs (Refinement Gini(1-Fano)/Palma Ratio)")
     fig.tight_layout()
 
     for i in range(arr.shape[0]):
@@ -117,7 +116,7 @@ def generate_heatmap(data, fname):
 
 
 
-folder = "ablation2_102580"
+folder = "ablation22_102580"
 for cell_type in cell_types:
     _cell_type = cell_type.replace("/",".")
     generate_heatmap(data_dic[cell_type], f"{folder}/{_cell_type}_f1.png")

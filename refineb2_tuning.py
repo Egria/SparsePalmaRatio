@@ -13,7 +13,7 @@ from src.refine_cluster import refine_cluster
 from src.refine.band2_refine import detect_rare_B2
 
 
-config_filename = "cfg/config_102580.json"
+config_filename = "cfg/config_94820.json"
 params = Parameters(config_filename)
 matrix, cells, genes, labels = preprocess(params)
 matrix_f, genes_f, cells_f = filter_counts(params, matrix, genes, cells, False)
@@ -26,16 +26,16 @@ b2 = {"gini": 0.2, "palma":0.8}
 b1 = {"palma": 1.0}
 
 bands = [
-            ("50-30", b5, 0.0, 500),
+            ("50-30", b5, 0.0, 450),
             ("30-10", b4, 0.0, params.gene_nfeatures),
-            ("10-3", b3, 0.0, 50),
+            ("10-3", b3, 0.0, 350),
             ("3-1", b2, 0.0, params.gene_nfeatures),
-            ("1-0.1", b1, 3.5, 850)
+            ("1-0.1", b1, 3.5, 200)
         ]
 
 
 graph, band_genes = make_channel_graphs(params, gene_stats, matrix_f, genes_f, labels, cells_f, cells,
-                                        b5=b5,b3=b3,b4=b4,b2=b2, b1=b1,bands=bands, band_weights=[0.8, 0.0, 0.2, 0.0, 0.6])
+                                        b5=b5,b3=b3,b4=b4,b2=b2, b1=b1,bands=bands, band_weights=[0.6, 0.0, 0.4, 0.0, 0.8])
 labels_f = generate_clusters(params, graph, cells_f)
 
 
@@ -105,7 +105,7 @@ def generate_heatmap(data, fname):
 
 
 
-folder = "b2refinement_102580"
+folder = "b2refinement_94820"
 for cell_type in cell_types:
     _cell_type = cell_type.replace("/",".")
     generate_heatmap(data_dic[cell_type], f"{folder}/{_cell_type}_f1.png")

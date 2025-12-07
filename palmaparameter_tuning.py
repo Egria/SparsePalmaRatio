@@ -46,10 +46,10 @@ def generate_heatmap(data, fname):
     plt.savefig(fname)
 
 
-config_filename = "cfg/config_hmd.json"
-markers = ["ENSG00000116729","ENSG00000111783","ENSG00000173372","ENSG00000173369","ENSG00000223609","ENSG00000111348",
-           "ENSG00000187514","ENSG00000077420","ENSG00000108018","ENSG00000188517","ENSG00000137285","ENSG00000139910",
-           "ENSG00000173267","ENSG00000277586","ENSG00000173068","ENSG00000152661","ENSG00000075884","ENSG00000111348"]
+config_filename = "cfg/config_206785.json"
+markers = ["CPVL","C1orf54","LSP1","CLEC9A","CPNE3","TYROBP","FTL","HLA-DQB1","DNASE1L3","SNX3","IDO1",
+"LGALS2","HLA-DQA1","S100A4","IRF8","FCER1G","ITM2B","HLA-DPB1","WDFY4","HLA-DPA1"
+]
 params = Parameters(config_filename)
 matrix, cells, genes, labels = preprocess(params)
 matrix_f, genes_f, cells_f = filter_counts(params, matrix, genes, cells, False)
@@ -86,7 +86,7 @@ for i, lb in enumerate(lower_bound):
             print(lb, ub, marker)
 
 
-folder = "heatmap_hmd"
+folder = "heatmap_206785"
 for marker in markers:
     generate_heatmap(data_dic[marker][0], f"{folder}/{marker}_palma_d.png")
     generate_heatmap(data_dic[marker][1], f"{folder}/{marker}_palma_r.png")

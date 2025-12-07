@@ -13,12 +13,16 @@ from src.refine_cluster import refine_cluster
 from src.refine.band2_refine import detect_rare_B2
 from src.select_genes import select_genes
 from src.refine.band1_refine import detect_ultrarare_B1
+from src.cell_normalize import cpm_normalize_csr
 
 
-config_filename = "cfg/config_102580.json"
+config_filename = "cfg/config_159115.json"
 params = Parameters(config_filename)
 matrix, cells, genes, labels = preprocess(params)
 matrix_f, genes_f, cells_f = filter_counts(params, matrix, genes, cells, False)
+
+#matrix_f = cpm_normalize_csr(matrix_f)
+
 gene_stats = calc_gene_stats(params, matrix_f, genes_f)
 gene_stats = detrend(params, gene_stats)
 
@@ -47,11 +51,11 @@ for i, f in enumerate(fano):
         b1 = {"gini":0.6, "palma": 0.4}
 
         bands = [
-            ("50-30", b5, 0.0, 500),
-            ("30-10", b4, 0.0, 50),
-            ("10-3", b3, 3.5, 850),
-            ("3-1", b2, 1.0, 950),
-            ("1-0.1", b1, 3.5, 350)
+            ("50-30", b5, 0.0, 1000),
+            ("30-10", b4, 0.0, 1000),
+            ("10-3", b3, 3.5, 1000),
+            ("3-1", b2, 1.0, 1000),
+            ("1-0.1", b1, 3.5, 1000)
         ]
 
         graph, band_genes = make_channel_graphs(params, gene_stats, matrix_f, genes_f, labels, cells_f, cells,
@@ -109,7 +113,7 @@ def generate_heatmap(data, fname):
 
 
 
-folder = "graphmix_102580"
+folder = "graphmix_159115"
 for cell_type in cell_types:
     _cell_type = cell_type.replace("/",".")
     generate_heatmap(data_dic[cell_type], f"{folder}/{_cell_type}_f1.png")

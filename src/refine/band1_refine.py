@@ -7,6 +7,116 @@ from sklearn.preprocessing import normalize
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import roc_auc_score
 
+
+
+def _palma_from_nonzero(
+    nonzero: np.ndarray,
+    n_cells: int,
+    top: float = 0.1,
+    bottom: float = 0.8,
+    alpha: float = 1e-5
+) -> float:
+    """
+    Palma-like ratio for one gene using only strictly-positive entries.
+    Zeros are implicit through n_cells (live at the bottom).
+    """
+    x = np.asarray(nonzero, float)
+    nnz = x.size
+    if nnz == 0 or n_cells <= 0:
+        return np.nan
+
+    tot = float(x.sum())
+    if tot <= 0.0:
+        return np.nan
+
+    # --- top share ---
+    k_top = int(np.ceil(top * n_cells))
+    k_top_nz = min(nnz, k_top)
+    xs_desc = np.sort(x)[::-1]
+    sum_top = float(xs_desc[:k_top_nz].sum())
+    share_top = sum_top / tot
+
+    # --- bottom share (including zeros) ---
+    n_zero = n_cells - nnz
+    k_bot = int(np.floor(bottom * n_cells))
+    if k_bot <= n_zero:
+        sum_bottom = 0.0
+    else:
+        k_bottom_nz = min(nnz, k_bot - n_zero)
+        xs_asc = np.sort(x)
+        sum_bottom = float(xs_asc[:k_bottom_nz].sum())
+    share_bottom = sum_bottom / tot
+
+    return (share_top + alpha) / (share_bottom + alpha)
+
+
+def _select_top_palma_genes_in_cluster(
+    X_gc: sp.csr_matrix,   # genes × cells (CPM / CP10k)
+    genes_index,           # pd.Index for rows (not used here but kept for API)
+    cell_idx: np.ndarray,  # global cell indices for this parent cluster
+    top_n: int = 500,
+    palma_top: float = 0.1,
+    palma_bottom: float = 0.8,
+    palma_alpha: float = 1e-5,
+    lowess_fun=None        # callable(palma, log2max) -> residuals
+) -> np.ndarray:
+    """
+    Inside a parent cluster (cells = cell_idx), compute local:
+      - Palma ratio per gene,
+      - log2(max expression + 1) per gene,
+      - 2-pass lowess residuals on (Palma, log2max),
+    and return indices of top_n genes with largest positive residuals.
+    """
+    if lowess_fun is None:
+        raise ValueError("lowess_fun must be provided (callable(palma, log2max) -> residuals).")
+
+    if not sp.isspmatrix_csr(X_gc):
+        X_gc = X_gc.tocsr(copy=False)
+
+    # Restrict to this cluster: genes × |C|
+    X_loc = X_gc[:, cell_idx].tocsr(copy=False)
+    n_genes, n_cells_loc = X_loc.shape
+    if n_cells_loc == 0 or n_genes == 0:
+        return np.array([], dtype=np.int64)
+
+    X_loc.sort_indices()
+    indptr, data = X_loc.indptr, X_loc.data
+
+    # Preallocate per-gene Palma and max
+    palma = np.full(n_genes, np.nan, dtype=float)
+    log2max = np.zeros(n_genes, dtype=float)
+
+    for g in range(n_genes):
+        s, e = indptr[g], indptr[g + 1]
+        if s == e:
+            # all zeros inside this cluster
+            continue
+        nz = data[s:e]
+        palma[g] = _palma_from_nonzero(
+            nz, n_cells_loc,
+            top=palma_top, bottom=palma_bottom, alpha=palma_alpha
+        )
+        log2max[g] = np.log2(float(nz.max()) + 1.0)
+
+    # Keep only genes with finite Palma
+    good = np.isfinite(palma)
+    if not np.any(good):
+        return np.array([], dtype=np.int64)
+
+    palma_good = palma[good]
+    log2max_good = log2max[good]
+    idx_good = np.flatnonzero(good)
+
+    # 2-pass lowess detrending (within this cluster)
+    residuals = lowess_fun(palma_good, log2max_good)
+
+    # Rank by residual (descending)
+    order = np.argsort(residuals)[::-1]
+    if top_n is not None and top_n < order.size:
+        order = order[:top_n]
+
+    idx_top = idx_good[order]
+    return idx_top.astype(np.int64)
 # ----------------------- helpers reused/adapted -----------------------
 
 def _indexer_first(gf: pd.Index, gq) -> np.ndarray:
@@ -351,4 +461,202 @@ def detect_ultrarare_B1(
             })
     report = pd.DataFrame(report_rows)
     report.to_csv(f"{output_path}/refine_b1.csv", index=True, header=True)
+    return labels_out.to_numpy(dtype=object), report
+
+
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+from sklearn.decomposition import TruncatedSVD
+from sklearn.preprocessing import normalize
+from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics import roc_auc_score
+
+# assumes same helpers as original B1: _zscore_cols, _arctan_center_transform_rows,
+# _pca_from_rows, _knn_graph_cosine, _internal_connectivity, _marker_auc_logfc,
+# _bootstrap_stability, and _select_top_palma_genes_in_cluster, lowess_twopass_detrending
+
+
+def detect_ultrarare_B1_new(
+    X_gc: sp.csr_matrix,           # genes × cells (CPM/CP10k), no log1p
+    genes_index: pd.Index,         # gene names aligned to rows
+    labels_major: np.ndarray,      # parent labels (after B2_new refinement)
+    *,
+    use_arctan: bool = False,
+    n_pcs: int = 15,
+    k_knn: int = 20,
+    seed_top_frac: float = 0.005,
+    seed_mad_k: float = 3.0,
+    grow_q: float = 0.95,
+    min_comp_size: int = 5,
+    s_mad_accept: float = 1.0,
+    conn_min: float = 0.20,
+    auc_min: float = 0.85,
+    n_markers_min: int = 1,
+    stab_bootstrap: int = 20,
+    stab_frac: float = 0.8,
+    stab_min: float = 0.30,
+    propagate_border: bool = False,
+    prop_steps: int = 2,
+    prop_pmin: float = 0.80,
+    random_state: int = 0,
+    output_path: str = '.',
+    top_n_genes: int = 500,
+    palma_top: float = 0.1,
+    palma_bottom: float = 0.8,
+    palma_alpha: float = 1e-5,
+    lowess_fun=None              # e.g. lowess_twopass_detrending
+):
+    """
+    B1 seed-and-grow (0.1–1% band) using *cluster-local* Palma top genes.
+    For each parent (major/B2-refined) cluster:
+      - compute Palma+log2max (within parent),
+      - 2-pass lowess, choose top_n_genes by residual,
+      - run B1 rare-seed/grow logic on those genes.
+    """
+    if lowess_fun is None:
+        raise ValueError("You must provide lowess_fun (e.g. lowess_twopass_detrending).")
+
+    if not sp.isspmatrix_csr(X_gc):
+        X_gc = X_gc.tocsr(copy=False)
+    X_gc.eliminate_zeros()
+    n_genes, n_cells = X_gc.shape
+    if len(labels_major) != n_cells:
+        raise ValueError("labels_major length must equal #cells.")
+
+    labels_out = pd.Series(labels_major.copy(), index=np.arange(n_cells), dtype=object)
+    report_rows = []
+    rng = np.random.default_rng(random_state)
+    parents = pd.Index(pd.Series(labels_major, dtype=object).unique())
+    child_counter = 0
+
+    for parent in parents:
+        C = np.flatnonzero(labels_major == parent)
+        if C.size < max(20, min_comp_size + 5):
+            continue
+
+        # ---- select top Palma-residual genes inside this parent (B1 band) ----
+        idx_B1 = _select_top_palma_genes_in_cluster(
+            X_gc, genes_index, C,
+            top_n=top_n_genes,
+            palma_top=palma_top, palma_bottom=palma_bottom, palma_alpha=palma_alpha,
+            lowess_fun=lowess_fun
+        )
+        if idx_B1.size == 0:
+            report_rows.append({"parent": parent, "child_label": None, "accepted": False,
+                                "reason": "no_palma_genes"})
+            continue
+
+        # local expression (genes × cells_in_parent)
+        X_loc = X_gc[idx_B1, :][:, C].tocsr(copy=False)
+
+        if use_arctan:
+            X_loc = _arctan_center_transform_rows(X_loc)
+
+        X_loc = _zscore_cols(X_loc)
+
+        # embedding
+        Z = _pca_from_rows(X_loc, n_components=n_pcs, random_state=random_state)
+
+        # local kNN graph
+        A = _knn_graph_cosine(Z, k=k_knn, mode="union")  # row-stochastic
+
+        # rare score: s = sum_g z_ig (equal weights)
+        s = np.asarray(X_loc.T.dot(np.ones(X_loc.shape[0], dtype=float))).ravel()
+        s_tilde = A.dot(s)   # one-step smoothing
+
+        med = float(np.median(s_tilde))
+        mad = float(np.median(np.abs(s_tilde - med))) + 1e-12
+        seed_thr = med + seed_mad_k * mad
+        q_thr = np.quantile(s_tilde, 1.0 - float(seed_top_frac))
+        seeds_mask = (s_tilde >= seed_thr) & (s_tilde >= q_thr)
+        if not seeds_mask.any():
+            report_rows.append({"parent": parent, "child_label": None, "accepted": False,
+                                "reason": "no_seeds"})
+            continue
+
+        grow_thr = float(np.quantile(s_tilde, float(grow_q)))
+        grow_nodes = np.flatnonzero(s_tilde >= grow_thr)
+        if grow_nodes.size == 0:
+            report_rows.append({"parent": parent, "child_label": None, "accepted": False,
+                                "reason": "no_grow_nodes"})
+            continue
+
+        # connected components of thresholded subgraph
+        mask_all = np.zeros(C.size, dtype=bool); mask_all[grow_nodes] = True
+        from scipy.sparse.csgraph import connected_components
+        A_thr = A[mask_all][:, mask_all]
+        n_comp, comp_labels = connected_components(A_thr, directed=False, return_labels=True)
+
+        comps = []
+        for k in range(n_comp):
+            loc = np.flatnonzero(comp_labels == k)
+            if loc.size == 0: continue
+            comps.append(grow_nodes[loc])
+
+        for comp in comps:
+            if comp.size < min_comp_size:
+                report_rows.append({"parent": parent, "child_label": None, "size": int(comp.size),
+                                    "accepted": False, "reason": f"size<{min_comp_size}"})
+                continue
+
+            s_med = float(np.median(s[comp]))
+            s_mad = float(np.median(np.abs(s - np.median(s)))) + 1e-12
+            if s_med < (np.median(s) + s_mad_accept * s_mad):
+                report_rows.append({"parent": parent, "child_label": None, "size": int(comp.size),
+                                    "accepted": False,
+                                    "reason": f"score_median_below_{s_mad_accept}MAD"})
+                continue
+
+            f_int = _internal_connectivity(A, comp)
+            if f_int < conn_min:
+                report_rows.append({"parent": parent, "child_label": None, "size": int(comp.size),
+                                    "accepted": False,
+                                    "reason": f"connectivity<{conn_min:.2f}",
+                                    "frac_internal": f_int})
+                continue
+
+            # marker coherence on selected B1 genes
+            S_mask_local = np.zeros(C.size, dtype=bool); S_mask_local[comp] = True
+            auc, lfc = _marker_auc_logfc(X_loc, np.arange(X_loc.shape[0]), S_mask_local)
+            n_mark = int(((auc >= auc_min) & (lfc > 0)).sum())
+            if n_mark < n_markers_min:
+                report_rows.append({"parent": parent, "child_label": None, "size": int(comp.size),
+                                    "accepted": False, "reason": f"markers<{n_markers_min}",
+                                    "frac_internal": f_int, "n_markers": n_mark})
+                continue
+
+            stab = _bootstrap_stability(A, S_mask_local,
+                                        n_boot=stab_bootstrap, frac=stab_frac,
+                                        resolution=1.5, seed=random_state)
+            if stab < stab_min:
+                report_rows.append({"parent": parent, "child_label": None, "size": int(comp.size),
+                                    "accepted": False, "reason": f"stability<{stab_min:.2f}",
+                                    "frac_internal": f_int, "n_markers": n_mark, "stability": stab})
+                continue
+
+            # ACCEPT: child of parent
+            child_counter += 1
+            child_name = f"{parent}_B1_{child_counter}"
+            labels_out.iloc[C[comp]] = child_name
+
+            if propagate_border:
+                y0 = np.zeros(C.size, dtype=np.float64)
+                y0[comp] = 1.0 / comp.size
+                P = A
+                y = y0.copy()
+                for _ in range(int(prop_steps)):
+                    y = P @ y
+                attach = np.flatnonzero((y >= float(prop_pmin)) & (~S_mask_local))
+                if attach.size:
+                    labels_out.iloc[C[attach]] = child_name
+
+            report_rows.append({
+                "parent": parent, "child_label": child_name, "size": int(comp.size),
+                "accepted": True, "reason": "ok",
+                "frac_internal": f_int, "n_markers": n_mark, "stability": stab
+            })
+
+    report = pd.DataFrame(report_rows)
+    report.to_csv(f"{output_path}/refine_b1_new.csv", index=True, header=True)
     return labels_out.to_numpy(dtype=object), report

@@ -43,6 +43,15 @@ def make_binary(
         B, zero_cells = jaccard_binary(X_sel, params.jaccard_gamma)
     elif params.activation == 'arctan':
         B, zero_cells = arctan_transform(X_sel)
+    elif params.activation == 'none':
+        X_sel.eliminate_zeros()
+
+        # cells x features
+        B = X_sel.T.tocsr(copy=False)
+        # store as float32 to save memory (optional; comment out if you want float64)
+        B.data = B.data.astype(np.float32, copy=False)
+
+        zero_cells = (B.getnnz(axis=1) == 0)
 
     else:
         raise NotImplementedError(params.activation)
